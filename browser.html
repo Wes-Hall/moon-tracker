@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>UK Moon Cycle • Position & Illumination</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #121a33;
+    --accent: #6aa5ff;
+    --text: #e8efff;
+    --muted: #9bb2d0;
+  }
+  body {
+    margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    color: var(--text); background: radial-gradient(1200px 600px at 50% -100px, #1b2447 0%, var(--bg) 60%, #070b18 100%);
+  }
+  header { padding: 16px 20px; border-bottom: 1px solid #1f2a56; background: linear-gradient(180deg, #10183a 0%, #0d1430 100%); }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: .3px; }
+  .wrap { display: grid; grid-template-columns: 360px 1fr; gap: 16px; padding: 16px; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--panel);
+    border: 1px solid #1f2a56; border-radius: 12px; padding: 14px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .controls .row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; margin: 12px 0; }
+  label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  select, input[type="range"], input[type="number"] {
+    width: 100%; background: #0d1430; color: var(--text); border: 1px solid #243061;
+    border-radius: 8px; padding: 8px 10px; outline: none;
+  }
+  input[type="range"] { padding: 0; height: 28px; }
+  .readout { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; margin-top: 8px; }
+  .pill {
+    background: #0f1735; border: 1px solid #243061; border-radius: 10px; padding: 10px; font-size: 13px;
+  }
+  .pill b { display: block; font-size: 11px; color: var(--muted); margin-bottom: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .stage {
+    display: grid; grid-template-columns: 220px 1fr; gap: 14px;
+  }
+  @media (max-width: 700px) { .stage { grid-template-columns: 1fr; } }
+  #phaseCanvas {
+    width: 220px; height: 220px; background: radial-gradient(120px 120px at 50% 50%, #0b1020, #090e1f);
+    border-radius: 12px; border: 1px solid #1f2a56;
+  }
+  #skyCanvas {
+    width: 100%; height: 320px; background: linear-gradient(180deg, #0f193b 0%, #0a112a 60%, #070d22 100%);
+    border-radius: 12px; border: 1px solid #1f2a56;
+  }
+  .legend { margin-top: 8px; color: var(--muted); font-size: 12px; }
+  .footer { margin-top: 8px; font-size: 12px; color: var(--muted); }
+  .inline { display: flex; gap: 8px; align-items: center; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+  <header><h1>Moon cycle • UK position & illumination</h1></header>
+
+  <div class="wrap">
+    <!-- Controls -->
+    <div class="card controls">
+      <div class="row">
+        <label for="location">UK location</label>
+        <select id="location">
+          <option value="51.5074,-0.1278">London (51.5074°N, 0.1278°W)</option>
+          <option value="53.4808,-2.2426">Manchester (53.4808°N, 2.2426°W)</option>
+          <option value="55.9533,-3.1883">Edinburgh (55.9533°N, 3.1883°W)</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label for="month">Month (UTC)</label>
+        <select id="month"></select>
+      </div>
+
+      <div class="row">
+        <label for="day">Day of month</label>
+        <div class="inline" style="gap:12px;">
+          <input id="day" type="range" min="1" max="31" step="1" value="1" style="flex:1;">
+          <input id="dayNum" type="number" min="1" max="31" step="1" value="1" style="width:70px;">
+        </div>
+      </div>
+
+      <div class="row">
+        <label for="time">Time of day</label>
+        <div style="display:grid; grid-template-columns: 1fr 70px; gap:12px; align-items:center;">
+          <input id="time" type="range" min="0" max="23.5" step="0.5" value="21">
+          <input id="timeText" type="text" class="mono" value="21:00" />
+        </div>
+      </div>
+
+      <div class="readout">
+        <div class="pill"><b>Illumination</b><span id="illumTxt">—</span></div>
+        <div class="pill"><b>Phase</b><span id="phaseTxt">—</span></div>
+        <div class="pill"><b>Altitude</b><span id="altTxt">—</span></div>
+        <div class="pill"><b>Azimuth</b><span id="aziTxt">—</span></div>
+      </div>
+
+      <div class="footer">Tip: drag the sliders to watch the Moon rise, culminate (highest point), and set. Times are interpreted in <span class="mono">UTC</span> for consistency.</div>
+    </div>
+
+    <!-- Visuals -->
+    <div class="card">
+      <div class="stage">
+        <canvas id="phaseCanvas" width="220" height="220"></canvas>
+        <div>
+          <canvas id="skyCanvas" width="800" height="320"></canvas>
+          <div class="legend">Sky view (south up): azimuth runs left→right (E→S→W), altitude is height above the horizon. The Moon dot is scaled by illumination.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SunCalc for accurate Moon position/illumination -->
+  <script src="https://unpkg.com/suncalc@1.9.0/suncalc.js"></script>
+  <script>
+    // --------- Helpers ----------
+    const monthEl = document.getElementById('month');
+    const dayEl = document.getElementById('day');
+    const dayNumEl = document.getElementById('dayNum');
+    const timeEl = document.getElementById('time');
+    const timeTextEl = document.getElementById('timeText');
+    const locationEl = document.getElementById('location');
+
+    const illumTxt = document.getElementById('illumTxt');
+    const phaseTxt = document.getElementById('phaseTxt');
+    const altTxt = document.getElementById('altTxt');
+    const aziTxt = document.getElementById('aziTxt');
+
+    const phaseCanvas = document.getElementById('phaseCanvas');
+    const skyCanvas = document.getElementById('skyCanvas');
+    const pctx = phaseCanvas.getContext('2d');
+    const sctx = skyCanvas.getContext('2d');
+
+    // Populate months for the current year (UTC)
+    const now = new Date();
+    const yearUTC = now.getUTCFullYear();
+    const monthNames = Array.from({length:12}, (_,m)=>new Date(Date.UTC(yearUTC,m,1)).toLocaleString('en-GB',{month:'long', timeZone:'UTC'}));
+    monthNames.forEach((name, i) => {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = `${name} ${yearUTC}`;
+      if (i === now.getUTCMonth()) opt.selected = true;
+      monthEl.appendChild(opt);
+    });
+
+    function daysInMonth(year, monthIdx){ // monthIdx 0-11 in UTC
+      return new Date(Date.UTC(year, monthIdx+1, 0)).getUTCDate();
+    }
+
+    function clampDayToMonth(){
+      const m = parseInt(monthEl.value, 10);
+      const dim = daysInMonth(yearUTC, m);
+      dayEl.max = dim; dayNumEl.max = dim;
+      if (+dayEl.value > dim) dayEl.value = dim;
+      if (+dayNumEl.value > dim) dayNumEl.value = dim;
+    }
+
+    function hhmmFromSlider(val){
+      const hours = Math.floor(val);
+      const mins = (val % 1) ? 30 : 0;
+      return `${String(hours).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+    }
+    function valFromHHMM(str){
+      const m = /^(\d{1,2}):(\d{2})$/.exec(str.trim());
+      if(!m) return null;
+      let h = Math.max(0, Math.min(23, parseInt(m[1],10)));
+      let mins = Math.max(0, Math.min(59, parseInt(m[2],10)));
+      // snap to nearest 30m
+      mins = mins < 15 ? 0 : (mins < 45 ? 30 : 0);
+      return h + (mins===30 ? 0.5 : 0);
+    }
+
+    function phaseName(phase){ // phase in [0..1)
+      // 0 = New, 0.25 = First Quarter, 0.5 = Full, 0.75 = Last Quarter
+      const names = [
+        {t: 0.01, n:"New Moon"},
+        {t: 0.24, n:"Waxing Crescent"},
+        {t: 0.26, n:"First Quarter"},
+        {t: 0.49, n:"Waxing Gibbous"},
+        {t: 0.51, n:"Full Moon"},
+        {t: 0.74, n:"Waning Gibbous"},
+        {t: 0.76, n:"Last Quarter"},
+        {t: 0.99, n:"Waning Crescent"},
+        {t: 1.01, n:"New Moon"} // wrap
+      ];
+      for (const k of names) if (phase <= k.t) return k.n;
+      return "—";
+    }
+
+    // --------- Drawing ----------
+    function drawPhaseDisk(fraction, angle){ 
+      // fraction [0..1], angle in radians (Sun-Earth-Moon phase angle); SunCalc gives angle
+      // We draw a lit portion on a grey disk: waxing = light on right, waning on left
+      const w = phaseCanvas.width, h = phaseCanvas.height;
+      const cx = w/2, cy = h/2, r = Math.min(w,h)*0.42;
+
+      // background
+      pctx.clearRect(0,0,w,h);
+      // subtle stars
+      pctx.globalAlpha = 0.25;
+      for(let i=0;i<60;i++){
+        const x = Math.random()*w, y = Math.random()*h, s = Math.random()*1.6;
+        pctx.fillStyle = "white"; pctx.fillRect(x,y,s,s);
+      }
+      pctx.globalAlpha = 1;
+
+      // Moon disk (shadowed)
+      pctx.beginPath();
+      pctx.arc(cx, cy, r, 0, Math.PI*2);
+      pctx.fillStyle = "#cfd7e6"; pctx.fill();
+      // Texture shading
+      pctx.globalAlpha = 0.25;
+      pctx.beginPath();
+      pctx.arc(cx, cy, r, 0, Math.PI*2);
+      const grd = pctx.createRadialGradient(cx- r*0.35, cy- r*0.35, r*0.1, cx, cy, r);
+      grd.addColorStop(0, "#9aa8c5"); grd.addColorStop(1, "rgba(0,0,0,0)");
+      pctx.fillStyle = grd; pctx.fill();
+      pctx.globalAlpha = 1;
+
+      // Terminator: compute lit limb using phase fraction
+      // Convert fraction to k in [-1..1]; k = 2f - 1 (negative: waning)
+      const k = 2 * fraction - 1; // -1 new, 0 half, +1 full
+      const waxing = k > 0 ? true : (k === 0 ? (Math.cos(angle) >= 0) : false);
+
+      // Draw shadow ellipse to represent night side
+      // We use the classical "two-ellipse" trick to render phases.
+      pctx.save();
+      pctx.beginPath();
+      pctx.arc(cx, cy, r, 0, 2*Math.PI);
+      pctx.clip();
+
+      // base dark overlay
+      pctx.fillStyle = "#0b1020";
+      // Shadow ellipse width depends on |k|
+      const ew = r * Math.abs(k);
+      // Direction: waxing => shadow on left; waning => shadow on right
+      pctx.beginPath();
+      if (waxing) {
+        // shadow left
+        pctx.ellipse(cx - 0, cy, ew, r, 0, -Math.PI/2, Math.PI/2);
+        pctx.lineTo(cx - r, cy + r);
+        pctx.lineTo(cx - r, cy - r);
+      } else {
+        // shadow right
+        pctx.ellipse(cx + 0, cy, ew, r, 0, Math.PI/2, -Math.PI/2, true);
+        pctx.lineTo(cx + r, cy - r);
+        pctx.lineTo(cx + r, cy + r);
+      }
+      pctx.closePath();
+      pctx.globalAlpha = 0.9;
+      pctx.fill();
+      pctx.globalAlpha = 1;
+      pctx.restore();
+
+      // Rim
+      pctx.beginPath();
+      pctx.arc(cx, cy, r, 0, Math.PI*2);
+      pctx.strokeStyle = "#6aa5ff"; pctx.lineWidth = 2; pctx.stroke();
+    }
+
+    function drawSky(alt, az, fraction){
+      const w = skyCanvas.width, h = skyCanvas.height;
+      sctx.clearRect(0,0,w,h);
+
+      // horizon & ticks
+      sctx.save();
+      // subtle stars
+      sctx.globalAlpha = 0.35;
+      for(let i=0;i<120;i++){
+        const x = Math.random()*w, y = Math.random()*h*0.9*Math.random();
+        const s = Math.random()*1.4;
+        sctx.fillStyle = "white"; sctx.fillRect(x,y,s,s);
+      }
+      sctx.globalAlpha = 1;
+
+      // Horizon line
+      sctx.strokeStyle = "#2a376d"; sctx.lineWidth = 2;
+      sctx.beginPath();
+      sctx.moveTo(0, h-40); sctx.lineTo(w, h-40); sctx.stroke();
+
+      // cardinal labels
+      sctx.fillStyle = "#9bb2d0"; sctx.font = "12px ui-sans-serif, system-ui";
+      const labels = [
+        {t: "E", az: 90},
+        {t: "S", az: 180},
+        {t: "W", az: 270},
+        {t: "N", az: 0}
+      ];
+      labels.forEach(l=>{
+        const x = (l.az/360)*w;
+        sctx.fillText(l.t, x-4, h-22);
+        sctx.beginPath(); sctx.moveTo(x, h-48); sctx.lineTo(x, h-32); sctx.strokeStyle="#243061"; sctx.stroke();
+      });
+
+      // Map azimuth (0=N, 90=E, 180=S, 270=W) to x across the canvas
+      let azDeg = ((az * 180/Math.PI) + 360) % 360;
+      const x = (azDeg/360) * w;
+
+      // Map altitude [-10..90] to y (cap values)
+      const altDeg = alt * 180/Math.PI;
+      const altClamped = Math.max(-10, Math.min(90, altDeg));
+      const y = (1 - (altClamped + 10) / 100) * (h - 60) + 20; // 20..(h-40)
+
+      // Draw moon marker (size scaled with illumination)
+      const r = 10 + 14 * fraction; // 10..24 px
+      // glow
+      sctx.beginPath();
+      sctx.arc(x, y, r*2, 0, Math.PI*2);
+      const g = sctx.createRadialGradient(x, y, r*0.3, x, y, r*2);
+      g.addColorStop(0, "rgba(255,255,255,0.35)");
+      g.addColorStop(1, "rgba(255,255,255,0)");
+      sctx.fillStyle = g; sctx.fill();
+
+      // core
+      sctx.beginPath();
+      sctx.arc(x, y, r, 0, Math.PI*2);
+      sctx.fillStyle = "#e9eef9"; sctx.fill();
+      sctx.lineWidth = 1.5; sctx.strokeStyle = "#6aa5ff"; sctx.stroke();
+
+      // altitude text near moon
+      sctx.fillStyle = "#d8e4ff"; sctx.font = "11px ui-sans-serif, system-ui";
+      sctx.fillText(`${altDeg.toFixed(1)}°`, x + r + 6, y - 6);
+
+      sctx.restore();
+    }
+
+    // --------- Main update ----------
+    function update(){
+      clampDayToMonth();
+      const [lat, lon] = locationEl.value.split(',').map(Number);
+      const m = parseInt(monthEl.value, 10);
+      const d = Math.min(parseInt(dayEl.value,10), daysInMonth(yearUTC, m));
+      const tSlider = parseFloat(timeEl.value);
+      const hhmm = hhmmFromSlider(tSlider);
+      timeTextEl.value = hhmm;
+
+      const [hh, mm] = hhmm.split(':').map(Number);
+
+      // Build date in UTC
+      const date = new Date(Date.UTC(yearUTC, m, d, hh, mm, 0));
+
+      // Moon data (SunCalc assumes degrees in/out where documented)
+      const pos = SunCalc.getMoonPosition(date, lat, lon);     // alt, az (radians)
+      const ill = SunCalc.getMoonIllumination(date);           // fraction [0..1], phase [0..1], angle (rad)
+
+      // Readouts
+      illumTxt.textContent = `${(ill.fraction*100).toFixed(1)}%`;
+      phaseTxt.textContent = phaseName(ill.phase);
+      altTxt.textContent = `${(pos.alt*180/Math.PI).toFixed(2)}°`;
+      aziTxt.textContent = `${(((pos.az*180/Math.PI)+360)%360).toFixed(2)}°`;
+
+      // Draw visuals
+      drawPhaseDisk(ill.fraction, ill.angle);
+      drawSky(pos.alt, pos.az, ill.fraction);
+    }
+
+    // --------- Wire up controls ----------
+    monthEl.addEventListener('change', ()=>{ update(); });
+
+    function syncDayInputs(fromRange){
+      if (fromRange) dayNumEl.value = dayEl.value;
+      else dayEl.value = dayNumEl.value;
+      update();
+    }
+    dayEl.addEventListener('input', ()=> syncDayInputs(true));
+    dayNumEl.addEventListener('input', ()=> syncDayInputs(false));
+
+    timeEl.addEventListener('input', ()=> update());
+    timeTextEl.addEventListener('change', ()=>{
+      const v = valFromHHMM(timeTextEl.value);
+      if (v !== null){ timeEl.value = v; }
+      timeTextEl.value = hhmmFromSlider(parseFloat(timeEl.value));
+      update();
+    });
+
+    locationEl.addEventListener('change', update);
+
+    // Init defaults
+    dayEl.value = String(now.getUTCDate());
+    dayNumEl.value = String(now.getUTCDate());
+    timeEl.value = 21; // evening default
+    timeTextEl.value = hhmmFromSlider(parseFloat(timeEl.value));
+    clampDayToMonth();
+    update();
+  </script>
+</body>
+</html>
